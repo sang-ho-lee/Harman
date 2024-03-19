@@ -867,6 +867,7 @@ module shift_register_PISO(
 
 endmodule
 
+
 module register_Nbit_p #(parameter N=8)(//파라미터 N으로 비트수 조절가능
     input clk, reset_p,
     input [N-1:0] d, //N비트, 
@@ -874,7 +875,7 @@ module register_Nbit_p #(parameter N=8)(//파라미터 N으로 비트수 조절�
     output [N-1:0] q
 );
 
-    reg [N-1:0] register;
+    reg [N-1:0] register; //레지스터의 실체! 이놈을 어떻게 회로에서 연결,구성할것인가가 중요
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) register = 0;
         else if(wr_en) register = d;
@@ -883,4 +884,24 @@ module register_Nbit_p #(parameter N=8)(//파라미터 N으로 비트수 조절�
     assign q = rd_en ? register : 'bz; //읽고싶지않을때(rd_en=0) 임피던스Z내보냄
     //입력중인 d를 바꾸고 싶을때 wren을 0주고 바꾼다음 다시 wren1주는 방식으로
     //rden도 마찬가지
+endmodule
+
+
+module sram_8bit_1024(
+    input clk,   //★메모리는 reset이 없음, 덮어쓰면 됨, 전원키면 0으로 클리어
+    input wr_en, rd_en,
+    input [9:0] addr, //select임
+    inout [7:0] data  //★"inout" => input output 모두 가능함!!★ 입력선 출력선 같이씀
+    //입력선 출력선 같이 쓰기때문에, 출력하지않을 때는 반드시 임피던스 출력해서 연결을 끊어줘야함
+);
+
+    reg [7:0] mem [0:1023]; //앞의 [7:0]은 크기선언, 뒤에 [0:1023]은 배열(즉 개수)선언
+    //8비트짜리 mem을 1024개 만들겠다
+
+    always @(posedge clk) begin
+        if(wr_en)mem[addr] <=  data;
+    end
+
+    assign data = rd_en ? mem[addr] : 'bz;
+
 endmodule

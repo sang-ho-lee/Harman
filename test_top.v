@@ -324,7 +324,7 @@ endmodule
 
 module button_ledbar_4bit_top(
     input clk, reset_p, 
-    input btn[3:0],
+    input [3:0] btn,
     output [7:0] led_bar);
     
     reg[7:0] btn_counter;
