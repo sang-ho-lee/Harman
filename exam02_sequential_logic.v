@@ -866,3 +866,21 @@ module shift_register_PISO(
     assign q = piso_reg[0]; //한 비트 밖에 출력을 못함, 위에서 계속 쉬프트해야함
 
 endmodule
+
+module register_Nbit_p #(parameter N=8)(//파라미터 N으로 비트수 조절가능
+    input clk, reset_p,
+    input [N-1:0] d, //N비트, 
+    input wr_en, rd_en, // Writing, Reading 각각 하고싶을때 하도록
+    output [N-1:0] q
+);
+
+    reg [N-1:0] register;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) register = 0;
+        else if(wr_en) register = d;
+    end
+
+    assign q = rd_en ? register : 'bz; //읽고싶지않을때(rd_en=0) 임피던스Z내보냄
+    //입력중인 d를 바꾸고 싶을때 wren을 0주고 바꾼다음 다시 wren1주는 방식으로
+    //rden도 마찬가지
+endmodule
