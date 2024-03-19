@@ -846,7 +846,7 @@ module shift_register_SIPO_n(//직렬입력병렬출력
 //    bufif1 (q[3], sipo_reg[3], rd_en); //primitive게이트인데 안쓸거니까 이런 문법이 있다 만 생각하고 담부터 안씀
 endmodule
 
-
+// 3/19
 module shift_register_PISO(
     input clk, reset_p,
     input [3:0] d,
@@ -899,9 +899,21 @@ module sram_8bit_1024(
     //8비트짜리 mem을 1024개 만들겠다
 
     always @(posedge clk) begin
-        if(wr_en)mem[addr] <=  data;
+        if(wr_en)mem[addr] <=  data; //디먹싱
     end
 
     assign data = rd_en ? mem[addr] : 'bz;
 
 endmodule
+//기본적인 회로는 다 배웠다
+// FPGA는 lut과 두가지로 회로를 만들어야하기때문에 다르다
+//게이트로 만들기때문에 다르다
+// CPU같이 큰 회로 만들 때는 일일이 관리하기가 어려우니
+// 모듈만들어서 한다해도 커지면 타이밍관리라든가, 동기, PDT, SLACK이 어려워짐
+//이제 시계같은 거를 만들어 보자
+
+// 1ms * 1000 = 1s 이렇게 시간을 잴수있는데
+// 재려면 clk의 주기가 일정해야함
+// clk의 주기가 일정한 회로가 fpga칩 안에 들어있다
+// 그 시스템 클럭을 쓸거고 그걸 캉누트 해보면 시간이얼마나 지났는지알수잇고
+// 그 시간을 출력하면 시계가 되는거다

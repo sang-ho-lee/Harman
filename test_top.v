@@ -406,3 +406,27 @@ module keypad_test_top(
 endmodule
 
 
+// 시계
+
+module watch_top(
+    input clk, reset_p,
+    input [2:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7);
+
+    wire clk_usec, clk_msec, clk_sec;
+
+    clock_usec usec_clk(clk, reset_p, clk_usec); //모듈에서 선언한 변수 순서대로 선언하면 .clk같은거 생략가능
+    clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec); //FND하위 2자리
+    clock_min min_clk(clk, reset_p, clk_sec, clk_min); //FND상위 2자리
+    //40us가 누적은 안됨 시뮬레이션 보면 지연되는것이 일정함
+
+    wire [3:0] sec1, sec10, min1, min10;
+
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value({min10,min1,sec10,sec1}), .seg_7_ca(seg_7), .com(com));
+
+endmodule
