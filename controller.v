@@ -148,7 +148,7 @@
         parameter SCAN_2 = 3; //변수에 값을 주면 상수가 되서 값이 변하지 않는다
         parameter SCAN_3 = 4; 
         parameter KEY_PROCESS = 5;
-
+//
 //        parameter SCAN_0 = 5'b00001;
 //        parameter SCAN_1 = 5'b00010;
 //        parameter SCAN_2 = 5'b00100; 
