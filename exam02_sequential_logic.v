@@ -453,7 +453,8 @@ module T_flip_flop_n(
 
 endmodule
 
-module T_flip_flop_p(
+module 
+    _flop_p(
     input clk, reset_p,
     input t,
     output reg q);

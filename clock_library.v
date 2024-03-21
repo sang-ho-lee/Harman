@@ -8,27 +8,27 @@ module clock_usec( //마이크로세크 클럭
 
     //basys는 clk 주기가 10ns
     reg [7:0] cnt_sysclk; //10ns
-    wire cp_usec;         //10ns 가 100개 있어야 1us, 즉 최소 7비트(8비트)필요
+    wire cp_usec;         //10ns 가 100개 를 세야 1us, 즉 최소 7비트(8비트)필요
 
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) cnt_sysclk = 0;
-        else if(cnt_sysclk >= 99) cnt_sysclk = 0; //100개 이상이 되면 0으로클리어되는느낌
-        else cnt_sysclk = cnt_sysclk + 1;
+        else if(cnt_sysclk >= 99) cnt_sysclk = 0; //99에서 다음 100이 되지 않고 0으로클리어됨
+        else cnt_sysclk = cnt_sysclk + 1; //reset이 들어오지 않으면 cnt_sysclk는 계속 1씩 증가
     end
 
-    assign cp_usec = cnt_sysclk < 50 ? 0 : 1; //1ms주기를 가지는 클락펄스는 조건에따라 0이나 1내보냄
+    assign cp_usec = cnt_sysclk < 50 ? 0 : 1; //1ms주기를 가지는 클락펄스는 0이었다가 cnt_sysclk이 50이 되면 1이 됨
     edge_detector_n ed(.clk(clk), .reset_p(reset_p),
      .cp(cp_usec), .n_edge(clk_usec));
     //99에서 0 으로떨어질때로 해야하므로 negative edge잡는게 좋음
 endmodule
 //cp는 1usec주기로 0 1이 바뀌는 애임
-//그러헥되면 1인동안 계속 카운트 될테니까 엣지디텍터로 원사이클써서
+//그렇게되면 1인동안 계속 카운트 될테니까 엣지디텍터로 원사이클써서
 
 
 module clock_div_1000( //1000분(나눌 분)주기만들기
-//1ms마다 한번씩클럭이나올것
+//1ms마다 한번씩클럭이나올것, 결국 천 개 세는 카운터
     input clk, reset_p,
-    output clk_source,
+    input clk_source,
     output clk_div_1000);
 
     reg [8:0] cnt_clk_source; //500개 필요함 즉 9비트 필요함 
@@ -42,7 +42,7 @@ module clock_div_1000( //1000분(나눌 분)주기만들기
         else if (clk_source) begin
             if(cnt_clk_source > 499) begin
                  cnt_clk_source = 0; //clear
-                 cp_div_1000 = ~cp_div_1000; //usec의 반주기마다 토글되도록
+                 cp_div_1000 = ~ cp_div_1000; //usec의 반주기마다 토글되도록
             end
             else cnt_clk_source = cnt_clk_source + 1;
         end
@@ -110,3 +110,4 @@ module counter_dec_60( //decimal로 60까지 세는 카운터
     end
 
 endmodule
+

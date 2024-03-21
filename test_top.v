@@ -415,18 +415,33 @@ module watch_top(
     output [7:0] seg_7);
 
     wire clk_usec, clk_msec, clk_sec;
+    wire [3:0] sec1, sec10, min1, min10;
+    wire sec_edge, min_edge;
+    wire btnS_pedge, btnUS_pedge, btnUM_pedge;
+    wire set_mode;
 
     clock_usec usec_clk(clk, reset_p, clk_usec); //모듈에서 선언한 변수 순서대로 선언하면 .clk같은거 생략가능
     clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
     clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec); //FND하위 2자리
-    clock_min min_clk(clk, reset_p, clk_sec, clk_min); //FND상위 2자리
-    //40us가 누적은 안됨 시뮬레이션 보면 지연되는것이 일정함
+    clock_min min_clk(.clk(clk), .reset_p(reset_p), .clk_sec(sec_edge), .clk_min(clk_min));
 
-    wire [3:0] sec1, sec10, min1, min10;
+    // clock_min min_clk(.clk(clk), .reset_p(reset_p), .clk_sec(sec_edge), .clk_min(clk_min));
+    // clock_min hr_clk(.clk(clk), .reset_p(reset_p), .clk_sec(min_edge), .clk_min(clk_hr));
 
-    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
-    counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
 
-    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value({min10,min1,sec10,sec1}), .seg_7_ca(seg_7), .com(com));
+    counter_dec_60 counter_sec(clk, reset_p, sec_edge, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, min_edge, min1, min10); //분
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value({min10,min1,sec10,sec1}), .seg_7_ca(seg_7), .com(com));
+
+    button_cntr btn_set( clk, reset_p, btn[0], btnS_pedge);
+    button_cntr btnU_sec( clk, reset_p, btn[1], btnUS_pedge);
+    button_cntr btnU_min( clk, reset_p, btn[2], btnUM_pedge);
+
+    // 내가 한거
+    T_flip_flop_n Set(clk, reset_p, btnS_pedge, set_mode);
+    assign sec_edge = set_mode ? btnUS_pedge : clk_sec;
+    assign min_edge = set_mode ? btnUM_pedge : clk_min;
 
 endmodule

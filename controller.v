@@ -60,7 +60,7 @@
             if(reset_p) debounced_btn = 0;
             else if(clk_div_16) debounced_btn = btn;
         end
-        edge_detector_n ed2(.clk(clk), .reset_p(reset_p), .cp(debounced_btn), .p_edge(btn_pe));
+        edge_detector_n ed2(.clk(clk), .reset_p(reset_p), .cp(debounced_btn), .p_edge(btn_pe), .n_edge(btn_ne));
         
     endmodule
     
