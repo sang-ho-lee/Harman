@@ -445,3 +445,426 @@ module watch_top(
     assign min_edge = set_mode ? btnUM_pedge : clk_min;
 
 endmodule
+
+
+module watch_top_r(
+    input clk, reset_p,
+    input [2:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [3:0] sec1, sec10, min1, min10;
+    wire sec_edge, min_edge;
+    wire [2:0] btn_pedge;
+    wire set_mode;
+
+    clock_usec usec_clk(clk, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk, reset_p, sec_edge, clk_min);
+    
+    counter_dec_60 counter_sec(.clk(clk), .reset_p(reset_p), .clk_time(sec_edge), .dec1(sec1), .dec10(sec10));
+    counter_dec_60 counter_min(.clk(clk), .reset_p(reset_p), .clk_time(min_edge), .dec1(min1), .dec10(min10));
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+                        .value({min10, min1, sec10, sec1}), .seg_7_ca(seg_7), .com(com));
+
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_setmode(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(set_mode));
+
+    assign sec_edge = (set_mode) ? btn_pedge[1] : clk_sec; // MUX
+    assign min_edge = (set_mode) ? btn_pedge[2] : clk_min; // MUX
+endmodule
+
+
+module loadable_watch_top(
+    input clk, reset_p,
+    input [2:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7);
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [3:0] sec1, sec10, min1, min10;
+    wire sec_edge, min_edge;
+    wire [2:0] btn_pedge;
+    wire set_mode;
+
+    clock_usec usec_clk(clk, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk, reset_p, sec_edge, clk_min);
+
+    wire cur_time_load_en, set_time_load_en;
+    wire [3:0] cur_sec1, cur_sec10, set_sec1, set_sec10;
+    wire [3:0] cur_min1, cur_min10, set_min1, set_min10;
+
+    loadable_counter_dec_60 cur_time_sec(.clk(clk), .reset_p(reset_p), .clk_time(clk_sec), .load_enable(cur_time_load_en),
+                                            .set_value1(set_sec1), .set_value10(set_sec10), .dec1(cur_sec1), .dec10(cur_sec10));
+    loadable_counter_dec_60 cur_time_min(.clk(clk), .reset_p(reset_p), .clk_time(clk_min), .load_enable(cur_time_load_en),
+                                             .set_value1(set_min1), .set_value10(set_min10), .dec1(cur_min1), .dec10(cur_min10));
+    //시간을 카운트
+    loadable_counter_dec_60 set_time_sec(.clk(clk), .reset_p(reset_p), .clk_time(btn_pedge[1]), .load_enable(set_time_load_en),
+                                             .set_value1(cur_sec1), .set_value10(cur_sec10), .dec1(set_sec1), .dec10(set_sec10));
+    loadable_counter_dec_60 set_time_min(.clk(clk), .reset_p(reset_p), .clk_time(btn_pedge[2]), .load_enable(set_time_load_en),
+                                             .set_value1(cur_min1), .set_value10(cur_min10), .dec1(set_min1), .dec10(set_min10));
+    //버튼 입력을 카운트
+    wire [15:0] value;
+    assign value = set_mode ? {set_min10, set_min1, set_sec10, set_sec1} : {cur_min10, cur_min1, cur_sec10, cur_sec1};
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+                        .value(value), .seg_7_ca(seg_7), .com(com));
+
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_setmode(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(set_mode));
+
+    edge_detector_n ed1(.clk(clk), .reset_p(reset_p), .cp(set_mode), .n_edge(cur_time_load_en), .p_edge(set_time_load_en));
+    assign sec_edge = (set_mode) ? btn_pedge[1] : clk_sec;
+    assign min_edge = (set_mode) ? btn_pedge[2] : clk_min;
+endmodule
+
+
+
+//스탑워치
+//tff의 출력이 1일때 시간이 가야함
+//usec로 들어가는 clk을 막아버리면 출력이 변하지 않을것
+
+module stopwatch_top(
+input clk, reset_p,
+input [2:0] btn,
+output [3:0] com,
+output [7:0] seg_7,
+output led);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [2:0] btn_pedge;
+    wire start_stop;
+    wire clk_start;
+    wire [3:0] sec1, sec10, min1, min10;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
+
+    assign clk_start = start_stop ? clk : 0;
+
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value({min10,min1,sec10,sec1}), .seg_7_ca(seg_7), .com(com));
+endmodule
+
+//시간은 계속 카운트하고 있는데
+//랩버튼을 누르면 버튼눌렀을때의 시간이 fnd에 표시되고
+//한번 더 누르면 계속카운트되던 시간이 표시되고
+//단 랩버튼을 눌러도 시간은 계속 카운트되고있어야함
+
+module stopwatch_lap_top(
+input clk, reset_p,
+input [2:0]btn,
+output [3:0] com,
+output [7:0] seg_7 //이것도 [7:0] 안썼음
+);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [2:0] btn_pedge;
+    wire start_stop;
+    wire clk_start;
+
+    wire [3:0] sec1, sec10, min1, min10;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
+    assign clk_start = start_stop ? clk : 0;
+
+
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
+    
+    wire lap_swatch, lap_load; //이거 안함
+    T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(btn_pedge[1]), .q(lap_swatch));
+
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch),
+                         .p_edge(lap_load));
+
+    reg [15:0] lap;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) lap = 0; //이거 안함
+        else if(lap_load) lap = {min10,min1,sec10,sec1};
+    end
+
+    wire [15:0] fnd_start;
+    assign fnd_start = lap_swatch ? lap : {min10,min1,sec10,sec1};
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value(fnd_start), .seg_7_ca(seg_7), .com(com));
+     //.value(min10,min1,sec10,sec1)을 그대로 쓰고 있었음
+
+endmodule
+
+module stopwatch_lap_top_answer(
+input clk, reset_p,
+input [2:0] btn,
+output [3:0] com,
+output [7:0] seg_7);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [2:0] btn_pedge;
+    wire start_stop;
+    wire clk_start;
+    wire [3:0] sec1, sec10, min1, min10;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
+
+    assign clk_start = start_stop ? clk : 0;
+
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
+
+    wire lap_swatch, lap_load;
+    T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(btn_pedge[1]), .q(lap_swatch));
+
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch),
+                         .p_edge(lap_load));
+
+    reg [15:0] lap;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) lap = 0;
+        else if(lap_load) lap = {min10,min1,sec10,sec1};
+    end
+
+    wire [15:0]value;
+    assign value = lap_swatch ? lap : {min10,min1,sec10,sec1};
+    
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value(value), .seg_7_ca(seg_7), .com(com));
+
+endmodule
+
+//초초:ms ms 
+//99다음에 1초증가
+module stopwatch_csec_top(
+input clk, reset_p,
+input [2:0] btn,
+output [3:0] com,
+output [7:0] seg_7);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min, clk_10msec;
+    wire [2:0] btn_pedge;
+    wire start_stop;
+    wire clk_start;
+    wire [3:0] sec1, sec10, min1, min10;
+    wire [3:0] csec1, csec10;
+    wire lap_swatch, lap_load;
+    reg [15:0] lap_time;
+    wire [15:0]value, cur_time;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    clock_div_10 ten_msec( clk_start, reset_p, clk_msec, clk_10msec);
+
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
+
+    assign clk_start = start_stop ? clk : 0;
+
+    counter_dec_100 counter_ms(clk, reset_p, clk_10msec, csec1, csec10);
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, mmin1, in10); //분
+
+
+    T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(btn_pedge[1]), .q(lap_swatch));
+
+ 
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch),
+                         .p_edge(lap_load));
+
+ 
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) lap_time = 0;
+        else if(lap_load) lap_time = {sec10,sec1,csec10,csec1};
+    end
+
+
+    assign cur_time = {sec10,sec1,csec10, csec1};
+    assign value = lap_swatch ? lap_time : cur_time;
+    
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value(value), .seg_7_ca(seg_7), .com(com));
+
+endmodule
+
+
+module timer_top(
+input clk, reset_p,
+input [2:0] btn,
+output [3:0] com,
+output [7:0] seg_7,
+output [15:0] led);
+
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire [2:0] btn_pedge;
+    wire start_stop;
+    wire clk_start;
+    wire [3:0] sec1, sec10, min1, min10, target_sec1, target_sec10, target_min1, target_min10;
+    reg [10:0] target_sec;
+    reg [10:0] target_min;
+    wire [3:0] cur_sec1, cur_sec10, set_sec1, set_sec10;
+    wire [3:0] cur_min1, cur_min10, set_min1, set_min10;
+    reg [15:0] remain_time;
+    wire [15:0] set_time;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(run_mode));
+    edge_detector_p runmode(.clk(clk), .reset_p(reset_p), .cp(run_mode), .p_edge(rm_pedge));
+    assign clk_start = run_mode ? clk : 0;
+
+    counter_dec_60 min(clk, reset_p, target_min, target_min1, target_min10);
+    counter_dec_60 sec(clk, reset_p, target_sec, target_sec1, target_sec10);
+    loadable_down_counter_dec_60 loadable_60m
+    (clk, reset_p, clk_min, rm_pedge, target_min1, target_min10, min1, min10);
+    loadable_down_counter_dec_60 loadable_60s
+    (clk, reset_p, clk_sec, rm_pedge, target_sec1, target_sec10, sec1, sec10);
+
+    assign set_time = {target_min1, target_min10, target_sec1, target_sec10};
+
+    wire [15:0] value;
+    assign value = run_mode ? remain_time : set_time;
+    assign led = (~remain_time) & run_mode;
+    
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) remain_time = 0;
+        else if(clk_start) remain_time = {min10,min1,sec10, sec1};
+    end
+
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            target_sec = 0;
+            target_min = 0;
+        end
+        else if(btn_pedge[1]) target_sec = target_sec + 1;
+        else if(btn_pedge[2]) target_min = target_min + 1;
+    end
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
+     .value(value), .seg_7_ca(seg_7), .com(com));
+endmodule
+
+module cook_clock_top(
+    input clk, reset_p,
+    input [2:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output led);
+    
+    wire clk_usec, clk_msec, clk_sec, clk_min;
+    wire sec_edge, min_edge;
+    wire [2:0] btn_pedge; 
+    wire set_mode;
+    
+    clock_usec usec_clk(clk, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk, reset_p, sec_edge, clk_min);
+    
+    wire cur_time_load_en, set_time_load_en;
+    wire [3:0] cur_sec1, cur_sec10, set_sec1, set_sec10;
+    wire [3:0] cur_min1, cur_min10, set_min1, set_min10;
+    
+    button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+
+    loadable_down_counter_dec_60 cur_time_sec(
+        .clk(clk), 
+        .reset_p(reset_p), 
+        .clk_time(sec_edge),
+        .load_enable(cur_time_load_en), 
+        .set_value1(set_sec1), 
+        .set_value10(set_sec10),
+        .dec1(cur_sec1),
+        .dec10(cur_sec10));
+    loadable_down_counter_dec_60 cur_time_min(
+        .clk(clk), 
+        .reset_p(reset_p), 
+        .clk_time(min_edge),
+        .load_enable(cur_time_load_en), 
+        .set_value1(set_min1), 
+        .set_value10(set_min10),
+        .dec1(cur_min1),
+        .dec10(cur_min10));
+    loadable_counter_dec_60 set_time_sec(
+        .clk(clk), 
+        .reset_p(reset_p), 
+        .clk_time(btn_pedge[1]), 
+        .load_enable(set_time_load_en),
+        .set_value1(cur_sec1),
+        .set_value10(cur_sec10), 
+        .dec1(set_sec1), 
+        .dec10(set_sec10));
+    loadable_counter_dec_60 set_time_min(
+        .clk(clk), 
+        .reset_p(reset_p), 
+        .clk_time(btn_pedge[2]), 
+        .load_enable(set_time_load_en),
+        .set_value1(cur_min1),
+        .set_value10(cur_min10), 
+        .dec1(set_min1), 
+        .dec10(set_min10));
+                
+    wire [15:0] value;
+    assign value = set_mode ? {set_min10, set_min1, set_sec10, set_sec1} : {cur_min10, cur_min1, cur_sec10, cur_sec1};                        
+    
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_ca(seg_7), .com(com));
+    
+    T_flip_flop_p tff_setmode(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(set_mode));
+    
+    edge_detector_p ed(.clk(clk), .reset_p(reset_p), 
+                 .cp(set_mode), .n_edge(cur_time_load_en), .p_edge(set_time_load_en));
+
+    assign sec_edge = set_mode ? btn_pedge[1] : clk_sec;
+    assign min_edge = set_mode ? btn_pedge[2] : clk_min;
+    assign led = ~{cur_min10, cur_min1, cur_sec10, cur_sec1} & set_mode;
+endmodule
