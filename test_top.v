@@ -872,22 +872,30 @@ endmodule
 
 module cook_timer_answer(
     input clk, reset_p,
-    input [3:0] btn,
+    input [3:0] btn, btnU,
     output [3:0] com,
     output [7:0] seg_7,
-    output [15:0] led);
+    output [15:0] led,
+    output buzz_clk);
 
+    reg alarm;
     wire btn_start, inc_sec, inc_min, alarm_off;
     wire [3:0] set_sec1, set_sec10, set_min1, set_min10;
     wire [3:0] cur_sec1, cur_sec10, cur_min1, cur_min10;
     wire load_enable, dec_clk, clk_start;
-    //변수이름 잘 지어주면 가독성굿
+    wire [15:0] value, cur_time, set_time;
+    reg start_stop;
+    wire timeout_pedge;
+    reg time_out;    //변수이름 잘 지어주면 가독성굿
 
+    assign led[5] = start_stop;
+    assign led[4] = time_out; //토글되는값들 LED로 확인하면서 가능
+
+    //헷갈리지 말자 => 조건 ? 참(1)일때실행 : 거짓(0)일때 실행
     assign clk_start = start_stop ? clk : 0; //start_stop이 안들어오면 0주든1주든 상수 주기
     clock_usec usec_clk(clk_start, reset_p, clk_usec);
     clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
     clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
-
     //clock_min min_clk(clk, reset_p, clk_sec, clk_min);
     //초를 n초 증가시킬때마다 분이 n초후에 감소하도록설정해야하는데 clock_min은 카운터기능이없어서 얘는쓸모없음
 
@@ -899,7 +907,6 @@ module cook_timer_answer(
     counter_dec_60 set_sec(.clk(clk), .reset_p(reset_p), .clk_time(inc_sec), .dec1(set_sec1), .dec10(set_sec10));
     counter_dec_60 set_min(.clk(clk), .reset_p(reset_p), .clk_time(inc_min), .dec1(set_min1), .dec10(set_min10));
 
-
     loadable_down_counter_dec_60 cur_sec(.clk(clk), .reset_p(reset_p), .clk_time(clk_sec)//1초에하나씩 깎기
     , .load_enable(load_enable), .set_value1(set_sec1), .set_value10(set_sec10),
     .dec1(cur_sec1), .dec10(cur_sec10), .dec_clk(dec_clk));
@@ -908,13 +915,162 @@ module cook_timer_answer(
     .dec1(cur_min1), .dec10(cur_min10)); //분 다운카운터에서는 dec_clk 필요없으니 괜히 충돌나지않게 dec_clk은삭제
     //wire에 두가지가 충돌나면 멀티플 뭐시기 에러, reg에 두가지가 들어가면 충돌나지않고 레이싱 상태가 되버림
 
-    T_flip_flop_p tff_start( .clk(clk), .reset_p(reset_p),.t(btn_start), .q(start_stop));
-    edge_detector_p edl(clk, reset_p, btn_start, load_enable); //start/stop버튼의 상승엣지에서 세팅값 로드
+    //T_flip_flop_p tff_start( .clk(clk), .reset_p(reset_p),.t(btn_start), .q(start_stop));
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) start_stop = 0;
+        else begin
+            if(btn_start) start_stop = ~start_stop; //여기까지만쓰면 위TFF 그대로 동작
+            else if(timeout_pedge) start_stop = 0;
+        end
+    end
+    edge_detector_p edl(clk, reset_p, start_stop, load_enable);
+    //start_stop버튼의 상승엣지에서&그다음 clk들어왔을때 세팅값 로드
 
-    wire [15:0] value, cur_time, set_time;
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) time_out = 0;
+        else begin
+            if(start_stop == 1 && clk_msec && cur_time == 0)
+                time_out = 1; //시간이흐르는상태에서 시간이 00:00이 될때
+            else time_out = 0;
+        end
+    end
+
+    edge_detector_p ed_timeout(clk, reset_p, time_out, timeout_pedge);
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p ) begin
+            alarm = 0;
+        end
+        else begin
+            if(timeout_pedge) alarm = 1;
+            else if(alarm && alarm_off) alarm = 0;
+        end
+    end
+
+    assign led[0] = alarm;
     assign cur_time = {cur_min10, cur_min1, cur_sec10, cur_sec1};
     assign set_time = {set_min10, set_min1, set_sec10, set_sec1};
     assign value = start_stop ? cur_time : set_time;
 
-    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_ca(seg_7), .com(com));
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7), .com(com));
+
+    reg [16:0] clk_div = 0;
+    always @(posedge clk) clk_div = clk_div + 1;
+
+    assign buzz_clk = alarm ? clk_div[11] : 0; //13->9000hz
+
+endmodule
+
+
+module multifunctional_watch(
+    input clk, reset_p,
+    input [3:0] btn, btnU,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [15:0] led,
+    output reg alarm);
+
+    wire btn_start, inc_sec, inc_min, alarm_off;
+    wire [3:0] set_sec1, set_sec10, set_min1, set_min10;
+    wire [3:0] cur_sec1, cur_sec10, cur_min1, cur_min10;
+    wire load_enable, dec_clk, clk_start;
+    wire [15:0] cur_time, set_time;
+    wire [15:0] fnd_value;
+    wire [15:0] value_cooktimer, value_stopwatch, value_watch;
+    wire timeout_pedge;
+    wire lap_swatch, lap_load;
+    reg start_stop;
+    reg [15:0] lap;
+    reg time_out;
+    
+    
+    assign led[6] = mode;
+    assign led[5] = start_stop;
+    assign led[4] = time_out;
+    assign led[0] = alarm;
+    assign clk_start = start_stop ? clk : 0;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+
+    button_cntr btn_cntr0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_mode));       // 모드변경
+    button_cntr btn_cntr1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_start));  // 시작버튼
+    button_cntr btn_cntr2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(inc_sec));    // 초증가
+    button_cntr btn_cntr3(.clk(clk), .reset_p(reset_p), .btn(btn[3]), .btn_pe(inc_min));    // 분증가
+    button_cntr btn_cntr4(.clk(clk), .reset_p(reset_p), .btn(btn[4]), .btn_pe(alarm_off));  // 알람끄기
+
+    counter_dec_60 set_sec(.clk(clk), .reset_p(reset_p), .clk_time(inc_sec), .dec1(set_sec1), .dec10(set_sec10));
+    counter_dec_60 set_min(.clk(clk), .reset_p(reset_p), .clk_time(inc_min), .dec1(set_min1), .dec10(set_min10));
+
+    loadable_down_counter_dec_60 cur_sec(.clk(clk), .reset_p(reset_p), .clk_time(clk_sec)//1초에하나씩 깎기
+    , .load_enable(load_enable), .set_value1(set_sec1), .set_value10(set_sec10),
+    .dec1(cur_sec1), .dec10(cur_sec10), .dec_clk(dec_clk));
+    loadable_down_counter_dec_60 cur_min(.clk(clk), .reset_p(reset_p), .clk_time(dec_clk)//초카운터가 00->59될 때
+    , .load_enable(load_enable), .set_value1(set_min1), .set_value10(set_min10),
+    .dec1(cur_min1), .dec10(cur_min10)); 
+
+    //btnstart
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) start_stop = 0;
+        else begin
+            if(btn_start) start_stop = ~start_stop;
+            else if(timeout_pedge) start_stop = 0;
+        end
+    end
+    edge_detector_p edl(clk, reset_p, start_stop, load_enable);
+
+
+    //STOPWATCH
+    T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(inc_sec), .q(lap_swatch)); //2번 버튼 누를시 lap
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch), .p_edge(lap_load));
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) lap = 0;
+        else if(lap_load) lap = {cur_min10,cur_min1,cur_sec10,cur_sec1};
+    end
+    assign value_stopwatch = lap_swatch ? lap : {cur_min10,cur_min1,cur_sec10,cur_sec1};
+    //STOPWATCH
+    
+    //COOKTIMER
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) time_out = 0;
+        else begin
+            if(start_stop == 1 && clk_msec && cur_time == 0)
+                time_out = 1; //시간이흐르는상태에서 시간이 00:00이 될때
+            else time_out = 0;
+        end
+    end
+
+    edge_detector_p ed_timeout(clk, reset_p, time_out, timeout_pedge);
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            alarm = 0;
+        end
+        else begin
+            if(timeout_pedge) alarm = 1;
+            else if(alarm && alarm_off) alarm = 0;
+        end
+    end
+
+    assign led[0] = alarm;
+    assign cur_time = {cur_min10, cur_min1, cur_sec10, cur_sec1};
+    assign set_time = {set_min10, set_min1, set_sec10, set_sec1};
+    assign value_cooktimer = start_stop ? cur_time : set_time;
+    //COOKTIMER
+
+
+    wire mode_pedge;
+    T_flip_flop_p md(.clk(clk), .reset_p(reset_p), .t(btn_mode), .q(mode));
+
+    assign fnd_value = mode ? value_stopwatch : value_cooktimer; //1이면 cooktimer
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(fnd_value), .seg_7_an(seg_7), .com(com));
+
+    //reg [16:0] clk_div = 0;
+    //always @(posedge clk) clk_div = clk_div + 1;
+
+    //assign buzz_clk = alarm ? clk_div[13] : 0; //13->9000hz
+
 endmodule
