@@ -144,8 +144,8 @@ module loadable_counter_dec_60(
     input clk, reset_p,
     input clk_time,
     input load_enable,
-    input [3:0] set_value1, set_value10, set_value100, set_value1000,
-    output reg [3:0] dec1, dec10, dec100, dec1000);
+    input [3:0] set_value1, set_value10,
+    output reg [3:0] dec1, dec10);
     always @(posedge clk or posedge reset_p) begin
         if(reset_p) begin
             dec1 = 0;
@@ -171,48 +171,41 @@ module loadable_counter_dec_60(
 endmodule
 
 
-module loadable_down_counter_dec_60(
+module loadable_down_counter_dec_60( //loadable 다운카운터
     input clk, reset_p,
     input clk_time,
     input load_enable,
-    input [31:0] set_value1, set_value10, set_value100, set_value1000,
-    output reg [31:0] dec1, dec10, dec100, dec1000);
+    input [3:0] set_value1, set_value10,
+    output reg [3:0] dec1, dec10,
+    output reg dec_clk); //상위비트를 하나 깎으라고 신호보내는 클럭
 
     always @(posedge clk or posedge reset_p) begin
         if(reset_p) begin
             dec1 = 9;
             dec10 = 5;
-            dec100 = 9;
-            dec1000 = 5;
+            dec_clk = 0;
         end
         else begin
             if(load_enable) begin
                 dec1 = set_value1;
                 dec10 = set_value10;
-                dec100 = set_value100;
-                dec1000 = set_value1000;
             end
             else if(clk_time) begin
                 if(dec1 == 0) begin
                     dec1 = 9;
                     if(dec10 == 0) begin
-                        dec10 = 5;
-                        if (dec100 == 0) begin
-                            dec100 = 9;
-                            if (dec1000 == 0) begin
-                                dec1000 = 5;
-                            end
-                            else dec1000 = dec1000 - 1;
+                        dec10 = 5; //00초->59초 될 때
+                        dec_clk = 1; //1을 내보내라 -> top에서 이 신호 가지고 상위비트를 하나깎거나 할 수 있음
                         end
-                        else dec100 = dec100 - 1;
-                    end
                     else dec10 = dec10 - 1;
                 end 
                 else dec1 = dec1 - 1;
             end
+            else dec_clk = 0;
         end
     end
 endmodule
+
 
 module clock_div_10( //10분(나눌 분)주기만들기
     input clk, reset_p,

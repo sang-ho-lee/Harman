@@ -803,16 +803,16 @@ module cook_clock_top(
     wire sec_edge, min_edge;
     wire [2:0] btn_pedge; 
     wire set_mode;
-    
+    wire cur_time_load_en, set_time_load_en;
+    wire [3:0] cur_sec1, cur_sec10, set_sec1, set_sec10;
+    wire [3:0] cur_min1, cur_min10, set_min1, set_min10;
+    wire [15:0] value;
     clock_usec usec_clk(clk, reset_p, clk_usec);
     clock_div_1000 msec_clk(clk, reset_p, clk_usec, clk_msec);
     clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec);
     clock_min min_clk(clk, reset_p, sec_edge, clk_min);
     
-    wire cur_time_load_en, set_time_load_en;
-    wire [3:0] cur_sec1, cur_sec10, set_sec1, set_sec10;
-    wire [3:0] cur_min1, cur_min10, set_min1, set_min10;
-    
+
     button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
     button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
     button_cntr btn2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
@@ -854,7 +854,7 @@ module cook_clock_top(
         .dec1(set_min1), 
         .dec10(set_min10));
                 
-    wire [15:0] value;
+
     assign value = set_mode ? {set_min10, set_min1, set_sec10, set_sec1} : {cur_min10, cur_min1, cur_sec10, cur_sec1};                        
     
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_ca(seg_7), .com(com));
@@ -867,4 +867,54 @@ module cook_clock_top(
     assign sec_edge = set_mode ? btn_pedge[1] : clk_sec;
     assign min_edge = set_mode ? btn_pedge[2] : clk_min;
     assign led = ~{cur_min10, cur_min1, cur_sec10, cur_sec1} & set_mode;
+endmodule
+
+
+module cook_timer_answer(
+    input clk, reset_p,
+    input [3:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [15:0] led);
+
+    wire btn_start, inc_sec, inc_min, alarm_off;
+    wire [3:0] set_sec1, set_sec10, set_min1, set_min10;
+    wire [3:0] cur_sec1, cur_sec10, cur_min1, cur_min10;
+    wire load_enable, dec_clk, clk_start;
+    //변수이름 잘 지어주면 가독성굿
+
+    assign clk_start = start_stop ? clk : 0; //start_stop이 안들어오면 0주든1주든 상수 주기
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+
+    //clock_min min_clk(clk, reset_p, clk_sec, clk_min);
+    //초를 n초 증가시킬때마다 분이 n초후에 감소하도록설정해야하는데 clock_min은 카운터기능이없어서 얘는쓸모없음
+
+    button_cntr btn_cntr0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_start)); //start/stop
+    button_cntr btn_cntr1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(inc_sec)); //초증가
+    button_cntr btn_cntr2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(inc_min)); //분증가
+    button_cntr btn_cntr3(.clk(clk), .reset_p(reset_p), .btn(btn[3]), .btn_pe(alarm_off));
+    
+    counter_dec_60 set_sec(.clk(clk), .reset_p(reset_p), .clk_time(inc_sec), .dec1(set_sec1), .dec10(set_sec10));
+    counter_dec_60 set_min(.clk(clk), .reset_p(reset_p), .clk_time(inc_min), .dec1(set_min1), .dec10(set_min10));
+
+
+    loadable_down_counter_dec_60 cur_sec(.clk(clk), .reset_p(reset_p), .clk_time(clk_sec)//1초에하나씩 깎기
+    , .load_enable(load_enable), .set_value1(set_sec1), .set_value10(set_sec10),
+    .dec1(cur_sec1), .dec10(cur_sec10), .dec_clk(dec_clk));
+    loadable_down_counter_dec_60 cur_min(.clk(clk), .reset_p(reset_p), .clk_time(dec_clk)//초카운터가 00->59될 때
+    , .load_enable(load_enable), .set_value1(set_min1), .set_value10(set_min10),
+    .dec1(cur_min1), .dec10(cur_min10)); //분 다운카운터에서는 dec_clk 필요없으니 괜히 충돌나지않게 dec_clk은삭제
+    //wire에 두가지가 충돌나면 멀티플 뭐시기 에러, reg에 두가지가 들어가면 충돌나지않고 레이싱 상태가 되버림
+
+    T_flip_flop_p tff_start( .clk(clk), .reset_p(reset_p),.t(btn_start), .q(start_stop));
+    edge_detector_p edl(clk, reset_p, btn_start, load_enable); //start/stop버튼의 상승엣지에서 세팅값 로드
+
+    wire [15:0] value, cur_time, set_time;
+    assign cur_time = {cur_min10, cur_min1, cur_sec10, cur_sec1};
+    assign set_time = {set_min10, set_min1, set_sec10, set_sec1};
+    assign value = start_stop ? cur_time : set_time;
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_ca(seg_7), .com(com));
 endmodule
