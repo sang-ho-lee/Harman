@@ -639,6 +639,32 @@ module ring_counter(
 
 endmodule
 
+module ring_counter_btn(
+    input clk, reset_p,
+    input btn,
+    output reg [3:0] q);
+    
+    always @(posedge clk, posedge reset_p)begin
+        if(reset_p) q = 4'b0001;
+        else begin
+            if(q == 4'b0001) q = 4'b1000;
+            else if(q == 4'b1000) q = 4'b0100;
+            else if(q == 4'b0100) q = 4'b0010;
+            else q = 4'b0001;
+//            case(q)
+//                4'b0001 : q = 4'b1000;
+//                4'b1000 : q = 4'b0100;
+//                4'b0100 : q = 4'b0010;
+//                4'b0010 : q = 4'b0001;    
+//                default : q = 4'b0001;
+//            endcase
+        end
+    end
+
+endmodule
+
+
+
 module ring_counter_fnd(
     input clk, reset_p,
     output reg [3:0] com);

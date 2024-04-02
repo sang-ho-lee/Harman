@@ -464,11 +464,13 @@ module watch_top_r(
     clock_div_1000 sec_clk(clk, reset_p, clk_msec, clk_sec);
     clock_min min_clk(clk, reset_p, sec_edge, clk_min);
     
-    counter_dec_60 counter_sec(.clk(clk), .reset_p(reset_p), .clk_time(sec_edge), .dec1(sec1), .dec10(sec10));
-    counter_dec_60 counter_min(.clk(clk), .reset_p(reset_p), .clk_time(min_edge), .dec1(min1), .dec10(min10));
+    counter_dec_60 counter_sec(.clk(clk), .reset_p(reset_p), .clk_time(sec_edge),
+                                 .dec1(sec1), .dec10(sec10));
+    counter_dec_60 counter_min(.clk(clk), .reset_p(reset_p), .clk_time(min_edge),
+                                 .dec1(min1), .dec10(min10));
 
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
-                        .value({min10, min1, sec10, sec1}), .seg_7_ca(seg_7), .com(com));
+                        .value({min10, min1, sec10, sec1}), .seg_7_an(seg_7), .com(com));
 
     button_cntr btn0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
     button_cntr btn1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
@@ -665,7 +667,7 @@ output [7:0] seg_7);
     assign value = lap_swatch ? lap : {min10,min1,sec10,sec1};
     
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
-     .value(value), .seg_7_ca(seg_7), .com(com));
+     .value(value), .seg_7_an(seg_7), .com(com));
 
 endmodule
 
@@ -723,7 +725,7 @@ output [7:0] seg_7);
     assign value = lap_swatch ? lap_time : cur_time;
     
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
-     .value(value), .seg_7_ca(seg_7), .com(com));
+     .value(value), .seg_7_an(seg_7), .com(com));
 
 endmodule
 
@@ -957,18 +959,17 @@ module cook_timer_answer(
     reg [16:0] clk_div = 0;
     always @(posedge clk) clk_div = clk_div + 1;
 
-    assign buzz_clk = alarm ? clk_div[11] : 0; //13->9000hz
+    assign buzz_clk = alarm ? clk_div[14] : 0; //13->9000hz
 
 endmodule
 
 
-module multifunctional_watch(
+module multifunctional_watch_fail(
     input clk, reset_p,
     input [3:0] btn, btnU,
     output [3:0] com,
     output [7:0] seg_7,
-    output [15:0] led,
-    output reg alarm);
+    output [15:0] led);
 
     wire btn_start, inc_sec, inc_min, alarm_off;
     wire [3:0] set_sec1, set_sec10, set_min1, set_min10;
@@ -982,12 +983,10 @@ module multifunctional_watch(
     reg start_stop;
     reg [15:0] lap;
     reg time_out;
-    
+    reg alarm;
     
     assign led[6] = mode;
     assign led[5] = start_stop;
-    assign led[4] = time_out;
-    assign led[0] = alarm;
     assign clk_start = start_stop ? clk : 0;
 
     clock_usec usec_clk(clk_start, reset_p, clk_usec);
@@ -1000,6 +999,11 @@ module multifunctional_watch(
     button_cntr btn_cntr2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(inc_sec));    // 초증가
     button_cntr btn_cntr3(.clk(clk), .reset_p(reset_p), .btn(btn[3]), .btn_pe(inc_min));    // 분증가
     button_cntr btn_cntr4(.clk(clk), .reset_p(reset_p), .btn(btn[4]), .btn_pe(alarm_off));  // 알람끄기
+    
+    //STOPWATCH
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sw_cur_sec1, sw_cur_sec10); //초
+    counter_dec_60 counter_min(clk, reset_p, clk_min, sw_cur_min1, sw_cur_min10); //분
+    //STOPWATCH
 
     counter_dec_60 set_sec(.clk(clk), .reset_p(reset_p), .clk_time(inc_sec), .dec1(set_sec1), .dec10(set_sec10));
     counter_dec_60 set_min(.clk(clk), .reset_p(reset_p), .clk_time(inc_min), .dec1(set_min1), .dec10(set_min10));
@@ -1021,16 +1025,15 @@ module multifunctional_watch(
     end
     edge_detector_p edl(clk, reset_p, start_stop, load_enable);
 
-
     //STOPWATCH
     T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(inc_sec), .q(lap_swatch)); //2번 버튼 누를시 lap
     edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch), .p_edge(lap_load));
 
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) lap = 0;
-        else if(lap_load) lap = {cur_min10,cur_min1,cur_sec10,cur_sec1};
+        else if(lap_load) lap = {sw_cur_min10,sw_cur_min1,sw_cur_sec10,sw_cur_sec1};
     end
-    assign value_stopwatch = lap_swatch ? lap : {cur_min10,cur_min1,cur_sec10,cur_sec1};
+    assign value_stopwatch = lap_swatch ? lap : {sw_cur_min10,sw_cur_min1,sw_cur_sec10,sw_cur_sec1};
     //STOPWATCH
     
     //COOKTIMER
@@ -1061,7 +1064,6 @@ module multifunctional_watch(
     assign value_cooktimer = start_stop ? cur_time : set_time;
     //COOKTIMER
 
-
     wire mode_pedge;
     T_flip_flop_p md(.clk(clk), .reset_p(reset_p), .t(btn_mode), .q(mode));
 
@@ -1072,5 +1074,51 @@ module multifunctional_watch(
     //always @(posedge clk) clk_div = clk_div + 1;
 
     //assign buzz_clk = alarm ? clk_div[13] : 0; //13->9000hz
+    //이건 접자 접어
+endmodule 
+
+
+module multifunctional_watch(
+    input clk, reset_p,
+    input [4:0] btn,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output buzz_clk,
+    output [15:0] led);
+
+    wire [7:0] mode0_seg_7, mode1_seg_7, mode2_seg_7;
+    wire [3:0] mode0_com, mode1_com, mode2_com;
+    wire [4:0] btn_pedge;
+    reg [2:0] mode;
+    reg [3:0] btn_on0, btn_on1, btn_on2;
+
+    button_cntr btn_cntr0(.clk(clk), .reset_p(reset_p), .btn(btn[0]), .btn_pe(btn_pedge[0]));
+    button_cntr btn_cntr1(.clk(clk), .reset_p(reset_p), .btn(btn[1]), .btn_pe(btn_pedge[1]));
+    button_cntr btn_cntr2(.clk(clk), .reset_p(reset_p), .btn(btn[2]), .btn_pe(btn_pedge[2]));
+    button_cntr btn_cntr3(.clk(clk), .reset_p(reset_p), .btn(btn[3]), .btn_pe(btn_pedge[3]));
+    button_cntr btn_cntr4(.clk(clk), .reset_p(reset_p), .btn(btn[4]), .btn_pe(btn_pedge[4]));
+
+    watch_top_r watch(.clk(clk), .reset_p(reset_p), .btn(btn_on0&btn), .com(mode0_com), .seg_7(mode0_seg_7));           
+    stopwatch_lap_top_answer sw(.clk(clk), .reset_p(reset_p), .btn(btn_on1&btn), .com(mode1_com), .seg_7(mode1_seg_7));       
+    cook_timer_answer cook(.clk(clk), .reset_p(reset_p), .btn(btn_on2&btn), .com(mode2_com), .seg_7(mode2_seg_7), .buzz_clk(buzz_clk));
+
+    always @(posedge clk, posedge reset_p)
+        if(reset_p)                     begin mode = 1; btn_on0 = 4'b1111; btn_on1 = 4'b0000; btn_on2 = 4'b1000; end
+        else if((mode==1)&btn_pedge[4]) begin mode = 2; btn_on1 = 4'b1111; btn_on0 = 4'b0000; btn_on2 = 4'b1000; end
+        else if((mode==2)&btn_pedge[4]) begin mode = 4; btn_on2 = 4'b1111; btn_on1 = 4'b0000; btn_on0 = 4'b0000; end
+        else if((mode==4)&btn_pedge[4]) begin mode = 1; btn_on0 = 4'b1111; btn_on1 = 4'b0000; btn_on2 = 4'b1000; end
+        else mode = mode;
+
+    assign seg_7 = (mode == 1) ? mode0_seg_7 : 
+                   ((mode == 2) ? mode1_seg_7 :
+                             mode2_seg_7) ;
+
+    assign com =   (mode == 1) ? mode0_com :
+                   ((mode == 2) ? mode1_com :
+                             mode2_com) ;
+
+    assign led[10] = mode[0];
+    assign led[11] = mode[1];
+    assign led[12] = mode[2];
 
 endmodule
