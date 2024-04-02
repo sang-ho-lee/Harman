@@ -643,7 +643,9 @@ module ring_counter_btn(
     input clk, reset_p,
     input btn,
     output reg [3:0] q);
-    
+
+    edge_detector_p ringbtn(clk, reset_p, time_out, timeout_pedge);
+
     always @(posedge clk, posedge reset_p)begin
         if(reset_p) q = 4'b0001;
         else begin
