@@ -54,35 +54,6 @@ module clock_div_1000( //1000분(나눌 분)주기만들기
 
 endmodule
 
-module clock_div_1000( //1000분(나눌 분)주기만들기
-//1ms마다 한번씩클럭이나올것, 결국 천 개 세는 카운터
-    input clk, reset_p,
-    input clk_source,
-    output clk_div_1000);
-
-    reg [8:0] cnt_clk_source; //500개 필요함 즉 9비트 필요함 
-    reg cp_div_1000;
-//usec * 1000 = msec
-    always @(posedge clk, posedge reset_p) begin
-        if(reset_p) begin
-            cnt_clk_source = 0;
-            cp_div_1000 = 0; //0으로 clear해놓고
-        end
-        else if (clk_source) begin
-            if(cnt_clk_source >= 499) begin
-                 cnt_clk_source = 0; //clear
-                 cp_div_1000 = ~ cp_div_1000; //usec의 반주기마다 토글되도록
-            end
-            else cnt_clk_source = cnt_clk_source + 1;
-        end
-    end
-        // assign cp_msec = cnt_clk_source >= 499 ? 1: 0; 위 if문에 500마다설정해줫으므로 필요없음
-        edge_detector_n ed(.clk(clk), .reset_p(reset_p),
-                            .cp(cp_div_1000), .n_edge(clk_div_1000));
-    //상승엣지 잡아서 써도 1msec 하강엣지써도 1msec임 어차피 한주기는 1msec니까
-
-endmodule
-
 //clk60개 들어올때마다 한번식 발쌩하는 60진 카운터
 
 //1초클락을 빼서 59->0으로, 1분에 한번씩만 펄스가 나오는 카운터
@@ -318,4 +289,87 @@ module counter_dec_100( //decimal로 60까지 세는 카운터
         end
     end
 
+endmodule
+
+
+module watch_clk(
+input clk, reset_p,
+output clk_usec, clk_msec, clk_10msec, clk_sec, clk_min
+);
+    reg [8:0] cnt_sysclk;
+    reg [8:0] cnt_usec_clk_source;
+    reg [8:0] cnt_msec_clk_source;
+    reg [8:0] cnt_10msec_clk_source;
+    reg [4:0] cnt_sec;
+    reg cp_div_msec, cp_div_10msec, cp_div_sec,  cp_min;
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) cnt_sysclk = 0;
+        else if(cnt_sysclk >= 99) cnt_sysclk = 0; //99에서 다음 100이 되지 않고 0으로클리어됨
+        else cnt_sysclk = cnt_sysclk + 1; //reset이 들어오지 않으면 cnt_sysclk는 계속 1씩 증가
+    end
+    assign cp_usec = cnt_sysclk < 50 ? 0 : 1; //1ms주기를 가지는 클락펄스는 0이었다가 cnt_sysclk이 50이 되면 1이 됨
+    edge_detector_n clkusec(.clk(clk), .reset_p(reset_p), .cp(cp_usec), .n_edge(clk_usec));
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            cnt_usec_clk_source = 0;
+            cp_div_msec = 0; //0으로 clear해놓고
+        end
+        else if (clk_usec) begin
+            if(cnt_usec_clk_source > 499) begin
+                 cnt_usec_clk_source = 0; //clear
+                 cp_div_msec = ~ cp_div_msec; //usec의 반주기마다 토글되도록
+            end
+            else cnt_usec_clk_source = cnt_usec_clk_source + 1;
+        end
+    end
+    edge_detector_n clkmsec(.clk(clk), .reset_p(reset_p), .cp(cp_div_msec), .n_edge(clk_msec));
+
+    always @(posedge clk, posedge reset_p) begin
+            if(reset_p) begin
+                cnt_10msec_clk_source = 0;
+                cp_div_10msec = 0; //0으로 clear해놓고
+            end
+            else if (clk_msec) begin
+                if(cnt_10msec_clk_source >= 4) begin 
+                    cnt_10msec_clk_source = 0; //clear
+                    cp_div_10msec = ~ cp_div_10msec; //usec의 반주기마다 토글되도록
+                end
+                else cnt_10msec_clk_source = cnt_10msec_clk_source + 1;
+            end
+    end
+    edge_detector_n clk10msec(.clk(clk), .reset_p(reset_p), .cp(cp_div_10msec), .n_edge(clk_10msec));
+
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            cnt_msec_clk_source = 0;
+            cp_div_sec = 0; //0으로 clear해놓고
+        end
+        else if (clk_msec) begin
+            if(cnt_msec_clk_source > 499) begin
+                 cnt_msec_clk_source = 0; //clear
+                 cp_div_sec = ~ cp_div_sec; //usec의 반주기마다 토글되도록
+            end
+            else cnt_msec_clk_source = cnt_msec_clk_source + 1;
+        end
+    end
+    edge_detector_n clksec(.clk(clk), .reset_p(reset_p), .cp(cp_div_sec), .n_edge(clk_sec));
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            cnt_sec = 0;
+            cp_min = 0; 
+        end
+        else if (clk_sec) begin
+            if(cnt_sec >= 29) begin //29되고 30으로 넘어갈때 동작
+                 cnt_sec = 0;
+                 cp_min = ~cp_min;
+            end
+            else cnt_sec = cnt_sec + 1;
+        end
+    end
+    edge_detector_n clkmin(.clk(clk), .reset_p(reset_p), .cp(cp_min), .n_edge(clk_min));
+    
 endmodule
