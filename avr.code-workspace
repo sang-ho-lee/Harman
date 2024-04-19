@@ -1,0 +1,17 @@
+{
+	"folders": [
+		{
+			"path": "ultrasonic"
+		}
+	],
+	"settings": {
+		"cmake.configureArgs": [
+			"-DAVR_TOOLCHAIN_DIR=D:/avr_tools/avr_gcc_8bit",
+			"-DCMAKE_MAKE_PROGRAM=D:/avr_tools/make/bin/make.exe"
+		],
+		"cmake.generator": "Unix Makefiles",
+		"files.associations": {
+			"ap.h": "c"
+		}
+	}
+}

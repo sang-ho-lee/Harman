@@ -1,0 +1,5 @@
+D:/avr_workspace/ultrasonic/build/CMakeFiles/ultrasonic.elf.dir
+D:/avr_workspace/ultrasonic/build/CMakeFiles/package.dir
+D:/avr_workspace/ultrasonic/build/CMakeFiles/package_source.dir
+D:/avr_workspace/ultrasonic/build/CMakeFiles/edit_cache.dir
+D:/avr_workspace/ultrasonic/build/CMakeFiles/rebuild_cache.dir
