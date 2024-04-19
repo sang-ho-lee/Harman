@@ -24,7 +24,6 @@ endmodule
 //cp는 1usec주기로 0 1이 바뀌는 애임
 //그렇게되면 1인동안 계속 카운트 될테니까 엣지디텍터로 원사이클써서
 
-
 module clock_div_1000( //1000분(나눌 분)주기만들기
 //1ms마다 한번씩클럭이나올것, 결국 천 개 세는 카운터
     input clk, reset_p,
@@ -40,7 +39,7 @@ module clock_div_1000( //1000분(나눌 분)주기만들기
             cp_div_1000 = 0; //0으로 clear해놓고
         end
         else if (clk_source) begin
-            if(cnt_clk_source > 499) begin
+            if(cnt_clk_source >= 499) begin
                  cnt_clk_source = 0; //clear
                  cp_div_1000 = ~ cp_div_1000; //usec의 반주기마다 토글되도록
             end

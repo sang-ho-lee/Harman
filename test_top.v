@@ -503,10 +503,9 @@ endmodule
 
 
 module loadable_watch(
-input  clk, reset_p,
-input [2:0] btn_pedge,
-output [15:0] value
-);
+    input  clk, reset_p,
+    input [2:0] btn_pedge,
+    output [15:0] value);
 
     wire clk_usec, clk_msec, clk_sec, clk_min;
     wire sec_edge, min_edge;
@@ -701,12 +700,12 @@ output [15:0] value);
     reg [15:0] lap_time;
     wire [15:0] cur_time;
 
-    watch_clk wc( clk, reset_p, btn_pedge, clk_usec, clk_msec, clk_10msec, clk_sec, clk_min);
-    //clock_usec usec_clk(clk_start, reset_p, clk_usec);
-    //clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
-    //clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
-    //clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
-    //clock_div_10 ten_msec( clk_start, reset_p, clk_msec, clk_10msec);
+    //watch_clk wc( clk, reset_p, btn_pedge, clk_usec, clk_msec, clk_10msec, clk_sec, clk_min);
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+    clock_min min_clk(clk_start, reset_p, clk_sec, clk_min);
+    clock_div_10 ten_msec( clk_start, reset_p, clk_msec, clk_10msec);
 
     T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
 
@@ -728,6 +727,46 @@ output [15:0] value);
 
     assign value = lap_swatch ? lap_time : cur_time;
 
+endmodule
+
+
+module stopwatch_csec_ek(
+    input clk, reset_p,
+    input [2:0] btn_pedge,
+    output [15:0] value);
+
+    wire clk_usec, clk_msec, clk_csec, clk_sec;
+    wire start_stop;
+    wire clk_start;
+    wire [3:0] csec1, csec10, sec1, sec10;
+    wire lap_swatch, lap_load;
+    reg [15:0] lap_time;
+    wire [15:0] cur_time;
+
+    clock_usec usec_clk(clk_start, reset_p, clk_usec);
+    clock_div_1000 msec_clk(clk_start, reset_p, clk_usec, clk_msec);
+    clock_div_10 csec_clk(clk_start, reset_p, clk_msec, clk_csec);
+    clock_div_1000 sec_clk(clk_start, reset_p, clk_msec, clk_sec);
+
+    T_flip_flop_p tff_start(.clk(clk), .reset_p(reset_p), .t(btn_pedge[0]), .q(start_stop));
+
+    assign clk_start = start_stop ? clk : 0;
+
+    counter_dec_100 counter_csec(clk, reset_p, clk_csec, csec1, csec10);
+    counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10);
+
+    T_flip_flop_p tff_lap(.clk(clk), .reset_p(reset_p), .t(btn_pedge[1]), .q(lap_swatch));
+
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(lap_swatch), .p_edge(lap_load));
+
+    assign cur_time = {sec10, sec1, csec10, csec1};
+
+    always @(posedge clk or posedge reset_p)begin
+        if(reset_p)lap_time = 0;
+        else if(lap_load)lap_time = cur_time;
+    end
+
+    assign value = lap_swatch ? lap_time : cur_time;
 endmodule
 
 //초초:ms ms 
@@ -1223,4 +1262,42 @@ fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7
 assign led[10] = mode[0];
 assign led[11] = mode[1];
 assign led[12] = mode[2];
+endmodule
+
+
+module dht11_top(
+    input clk, reset_p,
+    inout dht11_data,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [5:0] led_bar);
+
+    wire [7:0] humidity, temperature;
+
+    dht11 dht(clk, reset_p, dht11_data, humidity, temperature, led_bar);
+
+    wire [15:0] value;
+
+    assign value = {humidity, temperature};
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7), .com(com));
+
+endmodule
+
+module dh11_top_ek(
+    input clk, reset_p,
+    input dht11_data,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [7:0] led_bar);
+
+    wire [7:0] humidity, temperature;
+
+    dht11_ek dht(clk, reset_p, dht11_data, humidity, temperature, led_bar);
+
+    wire [15:0] value;
+
+    assign value = {humidity, temperature};
+    
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7), .com(com));
 endmodule

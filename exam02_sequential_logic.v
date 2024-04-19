@@ -730,7 +730,26 @@ endmodule
  
  
 
+module edge_detector_n_ek(
+    input clk, reset_p,
+    input cp,
+    output p_edge, n_edge);
 
+    reg ff_cur, ff_old;
+
+    always @(negedge clk or posedge reset_p) begin
+        if(reset_p)begin
+            ff_cur <= 0;
+            ff_old <= 0;
+        end
+        else begin
+            ff_cur <= cp;
+            ff_old <= ff_cur;
+        end
+    end
+    assign p_edge = ({ff_cur, ff_old} == 2'b10) ? 1 : 0;
+    assign n_edge = ({ff_cur, ff_old} == 2'b01) ? 1 : 0;
+endmodule
 
 
 module edge_detector_n(
@@ -945,3 +964,20 @@ endmodule
 // clk의 주기가 일정한 회로가 fpga칩 안에 들어있다
 // 그 시스템 클럭을 쓸거고 그걸 캉누트 해보면 시간이얼마나 지났는지알수잇고
 // 그 시간을 출력하면 시계가 되는거다
+
+module bin_to_dec(
+        input [11:0] bin,
+        output reg [15:0] bcd
+    );
+    reg [3:0] i;
+    always @(bin) begin
+        bcd = 0;
+        for (i=0;i<12;i=i+1)begin
+            bcd = {bcd[14:0], bin[11-i]};
+            if(i < 11 && bcd[3:0] > 4) bcd[3:0] = bcd[3:0] + 3;
+            if(i < 11 && bcd[7:4] > 4) bcd[7:4] = bcd[7:4] + 3;
+            if(i < 11 && bcd[11:8] > 4) bcd[11:8] = bcd[11:8] + 3;
+            if(i < 11 && bcd[15:12] > 4) bcd[15:12] = bcd[15:12] + 3;
+        end
+    end
+endmodule
