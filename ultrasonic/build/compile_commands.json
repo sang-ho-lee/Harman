@@ -1,0 +1,8 @@
+[
+{
+  "directory": "D:/avr_workspace/ultrasonic/build",
+  "command": "D:/avr_tools/avr_gcc_8bit/bin/avr-gcc.exe -DF_CPU=16000000UL -ID:/avr_workspace/ultrasonic/src -ID:/avr_workspace/ultrasonic/src/ap -ID:/avr_workspace/ultrasonic/src/bsp -ID:/avr_workspace/ultrasonic/src/hw -ID:/avr_workspace/ultrasonic/src/common -g -std=gnu11 -mmcu=atmega128a -fdata-sections -ffunction-sections -MMD -flto -fno-fat-lto-objects -Wall -Os -g3 -o CMakeFiles/ultrasonic.elf.dir/main.c.obj -c D:/avr_workspace/ultrasonic/main.c",
+  "file": "D:/avr_workspace/ultrasonic/main.c",
+  "output": "CMakeFiles/ultrasonic.elf.dir/main.c.obj"
+}
+]
