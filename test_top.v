@@ -1308,10 +1308,11 @@ module ultrasonic_top(
     output trigger,
     output [3:0] com,
     output [7:0] seg_7,
-    output [2:0] led_bar);
+    output [7:0] led_bar);
 
     wire [15:0] distance;
-
+    wire [15:0] distance_bcd;
+    
     hc_sr04 ultrasonic(
     .clk(clk),
     .reset_p(reset_p),
@@ -1319,11 +1320,10 @@ module ultrasonic_top(
     .trigger(trigger),
     .distance(distance),
     .led_bar(led_bar));
-
-    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(distance), .seg_7_an(seg_7), .com(com));
-
-
-
+    
+    bin_to_dec bcd(.bin(distance[11:0]), .bcd(distance_bcd));
+    
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(distance_bcd), .seg_7_an(seg_7), .com(com));
 
 endmodule
 
