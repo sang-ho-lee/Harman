@@ -372,3 +372,26 @@ output clk_usec, clk_msec, clk_10msec, clk_sec, clk_min
     edge_detector_n clkmin(.clk(clk), .reset_p(reset_p), .cp(cp_min), .n_edge(clk_min));
     
 endmodule
+
+
+module clock_usec_cora( //마이크로세크 클럭
+    input clk, reset_p,
+    output clk_usec);
+
+    //basys는 clk 주기가 10ns
+    reg [7:0] cnt_sysclk; //10ns
+    wire cp_usec;         //10ns 가 100개 를 세야 1us, 즉 최소 7비트(8비트)필요
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) cnt_sysclk = 0;
+        else if(cnt_sysclk >= 124) cnt_sysclk = 0; //99에서 다음 100이 되지 않고 0으로클리어됨
+        else cnt_sysclk = cnt_sysclk + 1; //reset이 들어오지 않으면 cnt_sysclk는 계속 1씩 증가
+    end
+
+    assign cp_usec = cnt_sysclk < 63 ? 0 : 1; //1ms주기를 가지는 클락펄스는 0이었다가 cnt_sysclk이 50이 되면 1이 됨
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p),
+     .cp(cp_usec), .n_edge(clk_usec));
+    //99에서 0 으로떨어질때로 해야하므로 negative edge잡는게 좋음
+endmodule
+//cp는 1usec주기로 0 1이 바뀌는 애임
+//그렇게되면 1인동안 계속 카운트 될테니까 엣지디텍터로 원사이클써서

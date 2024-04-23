@@ -303,26 +303,27 @@ endmodule
 
 
 module decoder_7seg(
- input [3:0] hex_value,
- output reg [7:0] seg_7);
+    input [3:0] hex_value,
+    output reg [7:0] seg_7);
     always @(hex_value)begin
         case(hex_value)
-            4'b0000: begin seg_7 = 8'b0000_0011; end //0, 비트가 0일 때 켜짐
-            4'b0001: begin seg_7 = 8'b1001_1111; end //1
-            4'b0010: begin seg_7 = 8'b0010_0101; end //2
-            4'b0011: begin seg_7 = 8'b0000_1101; end //3
-            4'b0100: begin seg_7 = 8'b1001_1001; end //4
-            4'b0101: begin seg_7 = 8'b0100_1001; end //5
-            4'b0110: begin seg_7 = 8'b0100_0001; end //6
-            4'b0111: begin seg_7 = 8'b0001_1011; end //7
-            4'b1000: begin seg_7 = 8'b0000_0001; end //8
-            4'b1001: begin seg_7 = 8'b0001_1001; end //9
-            4'b1010: begin seg_7 = 8'b0001_0001; end //a
-            4'b1011: begin seg_7 = 8'b1100_0001; end //b
-            4'b1100: begin seg_7 = 8'b0110_0011; end //c
-            4'b1101: begin seg_7 = 8'b1000_0101; end //d
-            4'b1110: begin seg_7 = 8'b0110_0001; end //e
-            4'b1111: begin seg_7 = 8'b0111_0001; end //f
+                              //abcd_efgp
+            4'b0000: seg_7 = 8'b0000_0011;  //0
+            4'b0001: seg_7 = 8'b1001_1111;  //1
+            4'b0010: seg_7 = 8'b0010_0101;  //2
+            4'b0011: seg_7 = 8'b0000_1101;  //3
+            4'b0100: seg_7 = 8'b1001_1001;  //4
+            4'b0101: seg_7 = 8'b0100_1001;  //5
+            4'b0110: seg_7 = 8'b0100_0001;  //6
+            4'b0111: seg_7 = 8'b0001_1011;  //7
+            4'b1000: seg_7 = 8'b0000_0001;  //8
+            4'b1001: seg_7 = 8'b0001_1001;  //9
+            4'b1010: seg_7 = 8'b0001_0001;  //A
+            4'b1011: seg_7 = 8'b1100_0001;  //b
+            4'b1100: seg_7 = 8'b0110_0011;  //C
+            4'b1101: seg_7 = 8'b1000_0101;  //d
+            4'b1110: seg_7 = 8'b0110_0001;  //E
+            4'b1111: seg_7 = 8'b0111_0001;  //F
         endcase
     end
 endmodule

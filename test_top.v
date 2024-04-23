@@ -580,7 +580,7 @@ module stopwatch_top(
     counter_dec_60 counter_sec(clk, reset_p, clk_sec, sec1, sec10); //초
     counter_dec_60 counter_min(clk, reset_p, clk_min, min1, min10); //분
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
-     .value({min10,min1,sec10,sec1}), .seg_7_ca(seg_7), .com(com));
+     .value({min10,min1,sec10,sec1}), .seg_7_an(seg_7), .com(com));
 endmodule
 
 //시간은 계속 카운트하고 있는데
@@ -634,7 +634,7 @@ module stopwatch_lap_top(
     assign fnd_start = lap_swatch ? lap : {min10,min1,sec10,sec1};
 
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p),
-     .value(fnd_start), .seg_7_ca(seg_7), .com(com));
+     .value(fnd_start), .seg_7_an(seg_7), .com(com));
      //.value(min10,min1,sec10,sec1)을 그대로 쓰고 있었음
 
 endmodule
@@ -1269,12 +1269,11 @@ module dht11_top(
     input clk, reset_p,
     inout dht11_data,
     output [3:0] com,
-    output [7:0] seg_7,
-    output [5:0] led_bar);
+    output [7:0] seg_7);
 
     wire [7:0] humidity, temperature;
 
-    dht11 dht(clk, reset_p, dht11_data, humidity, temperature, led_bar);
+    dht11 dht(clk, reset_p, dht11_data, humidity, temperature);
 
     wire [15:0] value;
 
@@ -1299,5 +1298,47 @@ module dh11_top_ek(
 
     assign value = {humidity, temperature};
     
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7), .com(com));
+endmodule
+
+
+module ultrasonic_top(
+    input clk, reset_p,
+    input echo,
+    output trigger,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [2:0] led_bar);
+
+    wire [15:0] distance;
+
+    hc_sr04 ultrasonic(
+    .clk(clk),
+    .reset_p(reset_p),
+    .echo(echo),
+    .trigger(trigger),
+    .distance(distance),
+    .led_bar(led_bar));
+
+    fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(distance), .seg_7_an(seg_7), .com(com));
+
+
+
+
+endmodule
+
+
+module ultra_sonic_top_jw(
+    input clk, reset_p,
+    input echo,
+    output trig,
+    output [3:0] com,
+    output [7:0] seg_7,
+    output [7:0]led_bar);
+
+    wire [15:0] distance;
+    ultra_sonic_jw us(.clk(clk), .reset_p(reset_p), .echo(echo), .trig(trig), .distance(distance), .led_bar(led_bar));
+    wire [15:0] value;
+    assign value = distance;
     fnd_4digit_cntr fnd(.clk(clk), .reset_p(reset_p), .value(value), .seg_7_an(seg_7), .com(com));
 endmodule

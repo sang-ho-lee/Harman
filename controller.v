@@ -24,25 +24,19 @@ module fnd_4digit_cntr(
     input [15:0] value,
     output [7:0] seg_7_an, seg_7_ca,
     output [3:0] com);
-    
     reg [3:0] hex_value;
-    
     ring_counter_fnd rc(.clk(clk), .reset_p(reset_p), .com(com));
-    
-    always @(posedge clk) begin
-        case(com)               
-            4'b0111 : hex_value = value[15:12];
-            4'b1011 : hex_value = value[11:8];
-            4'b1101 : hex_value = value[7:4];
-            4'b1110 : hex_value = value[3:0];
+    always @(posedge clk)begin
+        case(com)
+            4'b0111: hex_value = value[15:12];
+            4'b1011: hex_value = value[11:8];
+            4'b1101: hex_value = value[7:4];
+            4'b1110: hex_value = value[3:0];
         endcase
     end
-
     decoder_7seg fnd (.hex_value(hex_value), .seg_7(seg_7_an));
-    assign seg_7_ca = ~ seg_7_an;
-    
+    assign seg_7_ca = ~seg_7_an;
 endmodule
-
 
 module button_cntr(
     input clk, reset_p,
@@ -380,6 +374,7 @@ module dht11(
                         temperature = temp_data[23:16];//23:16의 8비트가 온도                        
                     end
                     if (count_usec > 22'd50_000) begin
+                        data_count = 0;
                         next_state = S_IDLE;
                         count_usec_e = 0;                        
                     end
@@ -391,143 +386,219 @@ module dht11(
 endmodule
 
 
-module dht11_ek(
-    input clk, reset_p,
-    inout dht11_data,   // inout을 쓸 때, impedence설정 꼭! 해야돼
-    output reg [7:0] humidity, temperature,
-    output [7:0] led_bar);
-    //shift 레지스터
-    parameter S_IDLE        = 6'b1;
-    parameter S_Low_18ms    = 6'b10;
-    parameter S_High_20us   = 6'b100;
-    parameter S_Low_80us    = 6'b1000;
-    parameter S_High_80us   = 6'b10000;
-    parameter S_Read_data   = 6'b100000;
-    //read data에서 40번 돌 때, low high 반복할 것임.
-    parameter S_Wait_Pedge  = 2'b01;
-    parameter S_Wait_Nedge  = 2'b10;
 
-    reg [21:0] count_usec;  // 3초를 기다리기 위해 22bit
+module hc_sr04(
+    input clk, reset_p,
+    input echo,
+    output reg trigger,
+    output distance,
+    output [2:0] led_bar);
+
+    parameter S_IDLE = 3'b001;
+    parameter S_TRIG_10US = 3'b010;
+    parameter S_READ_DATA = 3'b100;
+    parameter S_WAIT_PEDGE = 2'b01;
+    parameter S_WAIT_NEDGE = 2'b10;
+
+    reg [15:0] count_usec;
     wire clk_usec;
     reg count_usec_e;
     clock_usec usec_clk(clk, reset_p, clk_usec);
 
-    always @(negedge clk or posedge reset_p)begin
-        if(reset_p) count_usec = 0;
+    always @(negedge clk, posedge reset_p) begin
+            if(reset_p) count_usec = 0;
+            else begin
+                if(clk_usec && count_usec_e) count_usec = count_usec + 1; //count_usec인에이블설정
+                else if(!count_usec_e) count_usec = 0; 
+            end        
+    end
+
+    reg [2:0] state, next_state;
+    reg [1:0] read_state;
+
+    assign led_bar[2:0] = state;
+  
+    always @(negedge clk, posedge reset_p) begin
+        if(reset_p) state = S_IDLE;
+        else state = next_state;
+    end
+
+    wire echo_pedge, echo_nedge;
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(echo),
+            .p_edge(echo_pedge), .n_edge(echo_nedge));
+    
+    reg [15:0] distance_buffer;
+
+    always @(posedge clk, posedge reset_p) begin
+        if(reset_p) begin
+            count_usec_e = 0;
+            next_state = S_IDLE;
+            trigger = 0;
+            read_state = S_WAIT_PEDGE;
+        end
         else begin
-            //enable이 1이면 카운트, 아니면 0으로 초기화
-            if(clk_usec&& count_usec_e) count_usec = count_usec + 1;
+            case (state)
+                S_IDLE : begin
+                    if(count_usec <= 1000_000) begin// Allow 10ms from end of echo to next trigger pulse
+                        count_usec_e = 1; //시간(usec)을 센다
+                        trigger = 0;
+                    end
+                    else begin //10ms가 지나면
+                        count_usec_e = 0; //countusec = 0 초기화
+                        next_state = S_TRIG_10US; //트리거 동작준비                        
+                    end
+                end 
+                S_TRIG_10US : begin
+                    if (count_usec <= 10) begin
+                        count_usec_e = 1; //시간을 센다
+                        trigger = 1; //10us동안 트리거 HIGH
+                    end
+                    else begin //10us가 지나면
+                        count_usec_e = 0; //시간 그만 세고
+                        trigger = 0; //트리거 LOW
+                        next_state = S_READ_DATA; // 데이터 읽을 준비
+                    end                    
+                end 
+                //HC-SR04 지가 알아서 8 pulse 버스트
+                S_READ_DATA : begin
+                    case(read_state)
+                        S_WAIT_PEDGE : begin
+                            if(echo_pedge) begin                                  
+                                next_state = S_WAIT_NEDGE;
+                            end                            
+                        end 
+                        S_WAIT_NEDGE : begin//센서 신호의 nedge를 기다리면서 데이터들을 읽는 시간
+                            if (echo_nedge) begin //nedge가 들어 오면                                
+                                distance_buffer = count_usec / 58; 
+                                count_usec_e = 0;
+                                next_state = S_IDLE; 
+                                                                
+                            end
+                            else begin  //nedge가 들어오기 전까지는
+                            count_usec_e = 1; //시간을 카운트 하고
+                            end
+                        end                        
+                    endcase
+                    // if(echo_pedge) begin
+                    //     count_usec_e = 1;                        
+                    // end
+                    // if(echo_nedge) begin
+                    //     echotime_buffer = count_usec;
+                    //     count_usec_e = 0;
+                    //     next_state = S_IDLE;
+                    // end
+                end
+                default : next_state = S_IDLE;   
+            endcase
+        end
+    end
+    assign distance = distance_buffer;
+
+endmodule
+
+
+module ultra_sonic_jw(
+    input clk, reset_p,
+    input echo,
+    output trig,
+    output [15:0] distance,
+    output [7:0] led_bar);
+
+    parameter S_IDLE = 3'b001;
+    parameter S_HIGH_10US = 3'b010;
+    parameter S_READ_DATA = 3'b100;
+    parameter S_WAIT_PEDGE = 2'b01;
+    parameter S_WAIT_NEDGE = 2'b10;
+
+    reg [15:0] count_usec;
+    wire clk_usec;
+    reg count_usec_e;
+    clock_usec usec_clk(clk, reset_p, clk_usec);
+
+    always @(negedge clk or posedge reset_p)begin //네거티브 엣지를 사용하는 이유 :
+        if(reset_p)  count_usec = 0;
+        else begin
+            if(clk_usec && count_usec_e) count_usec = count_usec + 1;
             else if(!count_usec_e) count_usec = 0;
         end
     end
-    wire dht_pedge, dht_nedge;
-    edge_detector_n_ek ed(.clk(clk), .reset_p(reset_p), .cp(dht11_data), .p_edge(dht_pedge), .n_edge(dht_nedge));
+
+    wire echo_pedge, echo_nedge;
+    edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(echo), .p_edge(echo_pedge), .n_edge(echo_nedge));
     
-    reg [5:0] state, next_state;
+    reg [3:0] state, next_state;
     reg [1:0] read_state;
 
-    assign led_bar[7:0] = state;
-    //상태 천이
+    assign led_bar[2:0] = state;
+
     always @(negedge clk or posedge reset_p)begin
         if(reset_p) state = S_IDLE;
         else state = next_state;
     end
 
-    reg [39:0]  temp_data;
-    reg [5:0]   data_count;
+    reg [15:0] temp_data;
 
-    reg dht11_buffer;
-    assign dht11_data = dht11_buffer;
+    reg trig_buffer;
+    assign trig = trig_buffer;
 
     always @(posedge clk or posedge reset_p)begin
         if(reset_p)begin
             count_usec_e = 0;
             next_state = S_IDLE;
-            dht11_buffer = 1'bz;    // high impedence 설정
-            read_state = S_Wait_Pedge;
-            data_count = 0;
+            trig_buffer = 0;
+            read_state = S_WAIT_PEDGE;
         end
         else begin
             case(state)
-                //MCU signal: 내가 보내는 신호
                 S_IDLE:begin
-                    if(count_usec <= 22'd3000000)begin    //원래 코드 3_000_000
+                    if(count_usec < 16'd5000)begin  //3_000_000
                         count_usec_e = 1;
-                        dht11_buffer = 1'bz;
+                        trig_buffer = 0;
                     end
                     else begin
-                        next_state = S_Low_18ms;
+                        next_state = S_HIGH_10US;
                         count_usec_e = 0;
                     end
                 end
-                S_Low_18ms: begin
-                    if(count_usec <= 22'd20_000)begin
-                        count_usec_e = 1;
-                        dht11_buffer = 0;
+                S_HIGH_10US:begin
+                    if(count_usec <= 16'd11)begin
+                        count_usec_e =1;
+                        trig_buffer = 1;
                     end
                     else begin
-                        next_state = S_High_20us;
-                        count_usec_e = 0;
-                        dht11_buffer = 1'bz;
+                         count_usec_e = 0;
+                         next_state = S_READ_DATA;
+                         trig_buffer = 0;
                     end
                 end
-                //DHT signal: 온습도센서 신호
-                S_High_20us:begin
-                    if(count_usec < 22'd20_000)begin //20us기다렷는데
-                        count_usec_e = 1;
-                        dht11_buffer = 1'bz;
-                        if(dht_nedge)begin  //20us동안 negedge를 받는다면
-                            next_state = S_Low_80us; //다음모드로 전환
-                            count_usec_e = 0;   
-                        end
-                    end
-                    else begin  //DHT11에서 negedge를 받지 못했을 때
-                        next_state = S_IDLE;
-                    end
-                end
-                S_Low_80us:begin
-                    if(dht_pedge)begin
-                        next_state = S_High_80us;
-                    end
-                end
-                S_High_80us:begin
-                    if(dht_nedge)begin
-                        next_state = S_Read_data;
-                    end
-                end
-                S_Read_data:begin
+                S_READ_DATA:begin
                     case(read_state)
-                        S_Wait_Pedge: begin
-                            if(dht_pedge)begin
-                            read_state = S_Wait_Nedge;
+                        S_WAIT_PEDGE:begin
+                            if(echo_pedge)begin
+                                read_state = S_WAIT_NEDGE;
                             end
                             count_usec_e = 0;
                         end
-                        S_Wait_Nedge: begin
-                            if(dht_nedge)begin
-                                if(count_usec < 50)begin
-                                    temp_data = {temp_data[38:0], 1'b0};
+                        S_WAIT_NEDGE:begin
+                            if(echo_nedge)begin
+                                temp_data = count_usec;
+                                count_usec_e = 0;
+                                read_state = S_WAIT_PEDGE;
                             end
                             else begin
-                            temp_data = {temp_data[38:0], 1'b1};
+                                count_usec_e = 1;
                             end
-                            data_count = data_count + 1;
-                            read_state = S_Wait_Pedge;
-                            end
-                        else begin
-                            count_usec_e = 1;
-                        end
                         end
                     endcase
-                    if(data_count >= 40)begin
-                        data_count = 0;
+                    if(count_usec > 16'd36)begin
+                        temp_data = 0;
                         next_state = S_IDLE;
-                        humidity = temp_data[39:32];
-                        temperature = temp_data[23:16];
+                        count_usec_e = 0;
                     end
                 end
                 default:next_state = S_IDLE;
             endcase
         end
     end
+    assign distance = temp_data/58;
 endmodule
