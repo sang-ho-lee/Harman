@@ -391,8 +391,8 @@ module hc_sr04(
     input clk, reset_p,
     input echo,
     output reg trigger,
-    output distance,
-    output [2:0] led_bar);
+    output reg [15:0] distance,
+    output [7:0] led_bar);
 
     parameter S_IDLE = 3'b001;
     parameter S_TRIG_10US = 3'b010;
@@ -400,7 +400,7 @@ module hc_sr04(
     parameter S_WAIT_PEDGE = 2'b01;
     parameter S_WAIT_NEDGE = 2'b10;
 
-    reg [15:0] count_usec;
+    reg [22:0] count_usec;
     wire clk_usec;
     reg count_usec_e;
     clock_usec usec_clk(clk, reset_p, clk_usec);
@@ -408,16 +408,19 @@ module hc_sr04(
     always @(negedge clk, posedge reset_p) begin
             if(reset_p) count_usec = 0;
             else begin
-                if(clk_usec && count_usec_e) count_usec = count_usec + 1; //count_usec인에이블설정
+                if(clk_usec && count_usec_e) count_usec = count_usec + 1;//count_usec인에이블설정
                 else if(!count_usec_e) count_usec = 0; 
             end        
     end
 
     reg [2:0] state, next_state;
     reg [1:0] read_state;
-
+    
+    //LED
     assign led_bar[2:0] = state;
-  
+    assign led_bar[4:3] = read_state;
+    assign led_bar[5] = count_usec_e;
+    
     always @(negedge clk, posedge reset_p) begin
         if(reset_p) state = S_IDLE;
         else state = next_state;
@@ -427,7 +430,7 @@ module hc_sr04(
     edge_detector_n ed(.clk(clk), .reset_p(reset_p), .cp(echo),
             .p_edge(echo_pedge), .n_edge(echo_nedge));
     
-    reg [15:0] distance_buffer;
+//    reg [15:0] distance_buffer;
 
     always @(posedge clk, posedge reset_p) begin
         if(reset_p) begin
@@ -440,42 +443,41 @@ module hc_sr04(
             case (state)
                 S_IDLE : begin
                     if(count_usec <= 1000_000) begin// Allow 10ms from end of echo to next trigger pulse
-                        count_usec_e = 1; //시간(usec)을 센다
+                        count_usec_e = 1;//시간(usec)을 센다
                         trigger = 0;
                     end
                     else begin //10ms가 지나면
                         count_usec_e = 0; //countusec = 0 초기화
-                        next_state = S_TRIG_10US; //트리거 동작준비                        
+                        next_state = S_TRIG_10US; //트리거 동작준비�                        
                     end
                 end 
                 S_TRIG_10US : begin
-                    if (count_usec <= 10) begin
-                        count_usec_e = 1; //시간을 센다
-                        trigger = 1; //10us동안 트리거 HIGH
+                    count_usec_e = 1; //시간을 센다
+                    trigger = 1; //10 us동안 트리거신호 전송 
+                    if(count_usec >= 11) begin //10us가 지나면�
+                        count_usec_e = 0; //시간 그만 세고�
+                        trigger = 0; //트리거 신호 중지 
+                        next_state = S_READ_DATA;  // 데이터 읽을 준비
                     end
-                    else begin //10us가 지나면
-                        count_usec_e = 0; //시간 그만 세고
-                        trigger = 0; //트리거 LOW
-                        next_state = S_READ_DATA; // 데이터 읽을 준비
-                    end                    
                 end 
                 //HC-SR04 지가 알아서 8 pulse 버스트
                 S_READ_DATA : begin
                     case(read_state)
                         S_WAIT_PEDGE : begin
-                            if(echo_pedge) begin                                  
-                                next_state = S_WAIT_NEDGE;
+                            if(echo_pedge) begin                          
+                                read_state = S_WAIT_NEDGE;
                             end                            
                         end 
                         S_WAIT_NEDGE : begin//센서 신호의 nedge를 기다리면서 데이터들을 읽는 시간
-                            if (echo_nedge) begin //nedge가 들어 오면                                
-                                distance_buffer = count_usec / 58; 
+                            if (echo_nedge) begin//nedge가 들어 오면                                 
+                                distance = count_usec / 58; 
                                 count_usec_e = 0;
                                 next_state = S_IDLE; 
-                                                                
+                                read_state = S_WAIT_PEDGE;
+                                
                             end
-                            else begin  //nedge가 들어오기 전까지는
-                            count_usec_e = 1; //시간을 카운트 하고
+                            else begin   //nedge가 들어오기 전까지는
+                                count_usec_e = 1;  //시간을 카운트 하고
                             end
                         end                        
                     endcase
@@ -492,7 +494,7 @@ module hc_sr04(
             endcase
         end
     end
-    assign distance = distance_buffer;
+//    assign distance = distance_buffer;
 
 endmodule
 
